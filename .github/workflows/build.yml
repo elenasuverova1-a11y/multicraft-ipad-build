@@ -1,0 +1,206 @@
+name: MultiCraft - build on cloud Intel Mac
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos-intel:
+    name: Build for MacBook Air 2015 / Monterey
+    runs-on: macos-26-intel
+    timeout-minutes: 180
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      CMAKE_BUILD_PARALLEL_LEVEL: "3"
+    steps:
+      - name: Get project files
+        uses: actions/checkout@v4
+
+      - name: Choose compatible Xcode and check input
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.4.1.app/Contents/Developer
+          xcodebuild -version
+          echo "Single-file patch is bundled in this workflow"
+          python3 --version
+          df -h .
+
+      - name: Get pinned public MultiCraft source code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir multicraft
+          cd multicraft
+          git init -q
+          git remote add origin https://github.com/MultiCraft/MultiCraft.git
+          git fetch --depth=1 origin 1e0acbb3353bc0f13909d1112d47a49bb3d6763d
+          git -c advice.detachedHead=false checkout -q FETCH_HEAD
+
+      - name: Apply Freecam Fly and XYZ source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import base64, gzip
+          encoded = """
+          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
+          """
+          data = gzip.decompress(base64.b64decode(encoded))
+          Path("apply_multicraft_patch.py").write_bytes(data)
+          print("Patch extracted:", len(data), "bytes")
+          PYCODE
+          python3 apply_multicraft_patch.py multicraft --check
+          python3 apply_multicraft_patch.py multicraft
+
+      - name: Install build dependencies on remote Mac
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install cmake wget gettext glslang spirv-cross pkg-config
+          echo "$(brew --prefix gettext)/bin" >> "$GITHUB_PATH"
+          df -h .
+
+      - name: Build only Intel (x86_64) dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          sdk = Path('multicraft/Apple/scripts/sdk.sh')
+          text = sdk.read_text()
+          substitutions = {
+            'export OSX_OSVER=10.15': 'export OSX_OSVER=12.0',
+            'export OSX_ARCHES="x86_64 arm64"': 'export OSX_ARCHES="x86_64"',
+            'export OSX_ARCHITECTURES="x86_64;arm64"': 'export OSX_ARCHITECTURES="x86_64"',
+            'export OSX_ARCH="-arch x86_64 -arch arm64"': 'export OSX_ARCH="-arch x86_64"',
+          }
+          for before, after in substitutions.items():
+              assert text.count(before) == 1, f'Unexpected sdk.sh: {before}'
+              text = text.replace(before, after)
+          sdk.write_text(text)
+          for name in ('libSDL.sh', 'libpng.sh', 'luajit.sh', 'openal.sh', 'nghttp2.sh'):
+              f = Path('multicraft/Apple/scripts') / name
+              text = f.read_text()
+              assert 'for ARCH in x86_64 arm64' in text, f'Unexpected {name}'
+              f.write_text(text.replace('for ARCH in x86_64 arm64', 'for ARCH in x86_64'))
+          PY
+          cd multicraft/Apple
+          bash ./Start.sh 2>&1 | tee "$GITHUB_WORKSPACE/multicraft-build.log"
+
+      - name: Compile MultiCraft.app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project multicraft/Apple/MultiCraft/MultiCraft.xcodeproj \
+            -target MultiCraft \
+            -configuration Release \
+            -sdk macosx \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=YES \
+            MACOSX_DEPLOYMENT_TARGET=12.0 \
+            CODE_SIGNING_ALLOWED=NO \
+            SYMROOT="$GITHUB_WORKSPACE/products" \
+            build 2>&1 | tee -a "$GITHUB_WORKSPACE/multicraft-build.log"
+
+      - name: Pack app for transfer to iPad
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find "$GITHUB_WORKSPACE/products" -type d -name 'MultiCraft.app' -print -quit)"
+          test -n "$APP"
+          test -d "$APP/Contents/MacOS"
+          mkdir -p "$GITHUB_WORKSPACE/result"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" \
+            "$GITHUB_WORKSPACE/result/MultiCraft-Monterey-Intel.zip"
+          ls -lh "$GITHUB_WORKSPACE/result/"
+
+      - name: Upload ready Mac application
+        uses: actions/upload-artifact@v4
+        with:
+          name: MultiCraft-Monterey-Intel
+          path: result/MultiCraft-Monterey-Intel.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save error log if build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MultiCraft-error-log
+          path: multicraft-build.log
+          if-no-files-found: warn
+          retention-days: 14
